@@ -1,0 +1,17 @@
+pluginManagement {
+	repositories {
+		maven {
+			name = 'Fabric'
+			url = 'https://maven.fabricmc.net/'
+		}
+		mavenCentral()
+		gradlePluginPortal()
+	}
+}
+
+rootProject.name = 'MinecraftModsVrogil'
+
+// One directory per mod. The Gradle name stays lowercase so task paths read
+// nicely (`:twitchintegration:build`) while the folder keeps its pretty name.
+include 'twitchintegration'
+project(':twitchintegration').projectDir = file('TwitchIntegration')

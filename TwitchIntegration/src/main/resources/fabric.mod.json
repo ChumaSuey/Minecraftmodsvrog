@@ -1,0 +1,32 @@
+{
+	"schemaVersion": 1,
+	"id": "twitchintegration",
+	"version": "${version}",
+	"name": "TwitchIntegration",
+	"description": "Read-only Twitch chat inside a Minecraft session, fed by a small local Rust bridge process.",
+	"authors": [
+		"Vrogil"
+	],
+	"contact": {
+		"homepage": "",
+		"sources": ""
+	},
+	"license": "CC0-1.0",
+	"icon": "assets/twitchintegration/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"com.vrogil.TwitchIntegrationMod"
+		],
+		"client": [
+			"com.vrogil.client.TwitchIntegrationClient"
+		],
+		"twitchintegration:extensions": []
+	},
+	"depends": {
+		"fabricloader": ">=0.16.0",
+		"minecraft": "~1.21.4",
+		"java": ">=21",
+		"fabric-api": "*"
+	}
+}

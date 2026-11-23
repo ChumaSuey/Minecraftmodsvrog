@@ -1,0 +1,121 @@
+plugins {
+	id 'net.fabricmc.fabric-loom-remap' version "${loom_version}"
+	id 'maven-publish'
+}
+
+version = rootProject.findProperty('twitchintegration_version') ?: '1.0.0'
+group = 'com.vrogil'
+
+base {
+	// jar ends up as twitchintegration-1.21.4-<version>.jar
+	archivesName = "twitchintegration-${project.minecraft_version}"
+}
+
+repositories {
+	// Loom adds the Fabric/Mojang repos automatically. Add extra repos here if you
+	// depend on other mods.
+}
+
+loom {
+	splitEnvironmentSourceSets()
+
+	mods {
+		"twitchintegration" {
+			sourceSet sourceSets.main
+			sourceSet sourceSets.client
+		}
+	}
+}
+
+dependencies {
+	// versions live in gradle.properties
+	minecraft "com.mojang:minecraft:${project.minecraft_version}"
+	mappings loom.officialMojangMappings()
+	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+
+	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+}
+
+// --- Rust bridge ----------------------------------------------------------
+// `build` compiles bridge/ and tucks the binary into the jar. Pass -PskipBridge
+// when Rust is not installed; the mod still builds and can talk to a bridge you
+// started yourself. The binary is staged in build/generated so no compiled
+// artefacts ever land in src/.
+def bridgeDir = file('bridge')
+def isWindowsBuild = System.getProperty('os.name').toLowerCase(Locale.ROOT).contains('win')
+def bridgeExeName = isWindowsBuild ? 'twitch-bridge.exe' : 'twitch-bridge'
+def bridgePlatformId = {
+	def os = System.getProperty('os.name').toLowerCase(Locale.ROOT)
+	def arch = System.getProperty('os.arch').toLowerCase(Locale.ROOT)
+	def osPart = os.contains('win') ? 'windows' : (os.contains('mac') || os.contains('darwin')) ? 'macos' : 'linux'
+	def archPart = (arch.contains('aarch64') || arch.contains('arm64')) ? 'aarch64' : 'x86_64'
+	"${osPart}-${archPart}"
+}()
+def cargoExeName = isWindowsBuild ? 'cargo.exe' : 'cargo'
+def cargoOnPath = (System.getenv('PATH') ?: '').split(File.pathSeparator)
+		.any { dir -> new File(dir, cargoExeName).canExecute() }
+def skipBridge = project.hasProperty('skipBridge')
+def generatedBridgeDir = layout.buildDirectory.dir('generated/bridge').get().asFile
+
+tasks.register('buildBridge', Exec) {
+	group = 'build'
+	description = 'Compiles the Rust Twitch bridge (skipped with -PskipBridge or when cargo is missing).'
+	workingDir bridgeDir
+	commandLine cargoExeName, 'build', '--release'
+	onlyIf {
+		!skipBridge && bridgeDir.isDirectory() && cargoOnPath
+	}
+}
+
+tasks.register('copyBridge', Copy) {
+	group = 'build'
+	description = 'Copies the compiled bridge into the mod jar resources.'
+	dependsOn 'buildBridge'
+	onlyIf { !skipBridge }
+	from(new File(bridgeDir, "target/release/${bridgeExeName}"))
+	into(new File(generatedBridgeDir, "assets/twitchintegration/bin/${bridgePlatformId}"))
+}
+
+sourceSets.main.resources.srcDir(generatedBridgeDir)
+tasks.named('processResources').configure { dependsOn 'copyBridge' }
+
+processResources {
+	def version = project.version
+	inputs.property "version", version
+
+	filesMatching("fabric.mod.json") {
+		expand "version": version
+	}
+}
+
+tasks.withType(JavaCompile).configureEach {
+	it.options.release = 21
+}
+
+java {
+	// Generates a -sources.jar next to the mod jar. The release workflow only ships
+	// the plain jar; the sources one is for humans.
+	withSourcesJar()
+
+	sourceCompatibility = JavaVersion.VERSION_21
+	targetCompatibility = JavaVersion.VERSION_21
+}
+
+jar {
+	// LICENSE lives at the workspace root, next to the other repo-wide files.
+	from(rootProject.file("LICENSE")) {
+		rename { "${it}_twitchintegration" }
+	}
+}
+
+publishing {
+	publications {
+		create("mavenJava", MavenPublication) {
+			from components.java
+		}
+	}
+
+	repositories {
+		// add a target repo here if you ever publish to a maven
+	}
+}

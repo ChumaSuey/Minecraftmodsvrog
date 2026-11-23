@@ -1,0 +1,28 @@
+plugins {
+	id 'base'
+}
+
+// `./gradlew build` should build every mod in the workspace, not just the
+// (empty) root project. Add each new mod to settings.gradle and it is picked up
+// automatically.
+def modBuildTasks = subprojects.collect { it.path + ':build' }
+def modCleanTasks = subprojects.collect { it.path + ':clean' }
+def modDescriptions = subprojects
+		.collect { "${it.path} (${it.projectDir.name})" }
+		.sort()
+
+tasks.named('build') {
+	dependsOn modBuildTasks
+}
+
+tasks.named('clean') {
+	dependsOn modCleanTasks
+}
+
+tasks.register('mods') {
+	group = 'help'
+	description = 'Lists the mods in this workspace.'
+	doLast {
+		modDescriptions.each { println " - ${it}" }
+	}
+}
